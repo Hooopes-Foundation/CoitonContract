@@ -69,6 +69,11 @@ pub trait IDao<TContractState> {
     fn create_listing(ref self: TContractState,details:ByteArray,hash:felt252) ;
     fn approve_listing(ref self: TContractState,_id:u256,hash:felt252);
     fn get_unapproved_listings(self: @TContractState)-> Array<Listing>;
+    fn get_owner(self: @TContractState) -> ContractAddress;
+    fn hash(self: @TContractState, operand:felt252) -> felt252;
+    fn get_erc20(self: @TContractState) -> ContractAddress;
+    fn get_erc721(self: @TContractState) -> ContractAddress;
+    fn get_erc1155(self: @TContractState) -> ContractAddress;
     fn get_listings(self: @TContractState) -> Array<Listing>;
     fn stake_listing_fee(ref self: TContractState,amount:felt252);
     fn register_organization(ref self: TContractState,validator:u256, name: felt252,region:felt252);
@@ -87,7 +92,6 @@ mod dao {
     use core::hash::{HashStateTrait, HashStateExTrait};
     use core::{pedersen::PedersenTrait, poseidon::PoseidonTrait};
 
-   // use openzeppelin::token::erc1155::interface::{IERC1155Dispatcher, IERC1155DispatcherTrait};
     #[storage]
     struct Storage {
         owner:ContractAddress,
@@ -111,13 +115,14 @@ mod dao {
     #[constructor]
     fn constructor(
         ref self: ContractState,
-        owner:ContractAddress,
         erc20_address:ContractAddress,
-        erc1155_address:ContractAddress
+        erc1155_address:ContractAddress,
+        erc721_address:ContractAddress
     ) {
         self.owner.write(get_caller_address());
         self.erc20_address.write(erc20_address);
         self.erc1155_address.write(erc1155_address);
+        self.erc721_address.write(erc721_address);
     }
 
 
@@ -125,7 +130,7 @@ mod dao {
     impl DaoImpl of super::IDao<ContractState> {
 
          fn register_validator(ref self: ContractState,validator:u256) {
-            assert!( get_caller_address()==self.owner.read(),"UNAUTHORIZED");
+            assert!(get_caller_address()==self.owner.read(),"UNAUTHORIZED");
             self.validators.write(validator,true);
         }
 
@@ -152,8 +157,33 @@ mod dao {
             orgs
         }
 
+
+         fn hash(self: @ContractState, operand:felt252) -> felt252{
+            let poseidon_hash = PoseidonTrait::new().update_with(operand).finalize();
+            poseidon_hash
+        }
+
+
+        
+
         fn get_organization(self: @ContractState,domain:ContractAddress) -> Organization {
            self.organization_by_domain.read(domain)
+        }
+
+           fn get_owner(self: @ContractState) -> ContractAddress {
+           self.owner.read()
+        }
+
+             fn get_erc20(self: @ContractState) -> ContractAddress {
+           self.erc20_address.read()
+        }
+
+             fn get_erc721(self: @ContractState) -> ContractAddress {
+           self.erc721_address.read()
+        }
+
+             fn get_erc1155(self: @ContractState) -> ContractAddress {
+           self.erc1155_address.read()
         }
 
         // Listing
