@@ -1,4 +1,5 @@
 use core::starknet::ContractAddress;
+use starknet::class_hash::ClassHash;
 
 #[derive(Copy, Drop, Serde, starknet::Store)]
  pub struct Organization {
@@ -68,6 +69,7 @@ pub trait IDao<TContractState> {
     fn register_validator(ref self: TContractState,validator:u256);
     fn create_listing(ref self: TContractState,details:ByteArray,hash:felt252) ;
     fn approve_listing(ref self: TContractState,_id:u256,hash:felt252);
+    fn version(self: @TContractState) -> u16;
     fn get_unapproved_listings(self: @TContractState)-> Array<Listing>;
     fn get_owner(self: @TContractState) -> ContractAddress;
     fn hash(self: @TContractState, operand:felt252) -> felt252;
@@ -79,18 +81,21 @@ pub trait IDao<TContractState> {
     fn register_organization(ref self: TContractState,validator:u256, name: felt252,region:felt252);
     fn get_organizations(self: @TContractState) -> Array<Organization>;
     fn get_organization(self: @TContractState,domain:ContractAddress) -> Organization;
+    fn upgrade(ref self: TContractState, impl_hash: ClassHash);
    
 }
 
 #[starknet::contract]
 mod dao {
     use super::{Organization,Listing, IERC1155EXTDispatcher,IERC1155EXTDispatcherTrait,IERC721EXTDispatcher,IERC721EXTDispatcherTrait,IERC20Dispatcher,IERC20DispatcherTrait};
-    use core::starknet::{ContractAddress,get_caller_address,get_contract_address};
+    use starknet::{ContractAddress,get_caller_address,get_contract_address};
     use core::integer::u256;
     use core::num::traits::Zero;
     use  starknet::storage::Map;
     use core::hash::{HashStateTrait, HashStateExTrait};
     use core::{pedersen::PedersenTrait, poseidon::PoseidonTrait};
+    use starknet::class_hash::ClassHash;
+    use starknet::SyscallResultTrait;
 
     #[storage]
     struct Storage {
@@ -109,17 +114,30 @@ mod dao {
         unapproved_listing_count:u256,
         unapproved_listings: Map::<u256,Listing>,
         listings: Map::<u256,Listing>,
+        version:u16,
 
+    }
+
+    #[event]
+    #[derive(Copy, Drop, Debug, PartialEq, starknet::Event)]
+    pub enum Event {
+        Upgraded: Upgraded,
+    }
+
+    #[derive(Copy, Drop, Debug, PartialEq, starknet::Event)]
+    pub struct Upgraded {
+        pub implementation: ClassHash
     }
 
     #[constructor]
     fn constructor(
         ref self: ContractState,
+        owner:ContractAddress,
         erc20_address:ContractAddress,
         erc1155_address:ContractAddress,
         erc721_address:ContractAddress
     ) {
-        self.owner.write(get_caller_address());
+        self.owner.write(owner);
         self.erc20_address.write(erc20_address);
         self.erc1155_address.write(erc1155_address);
         self.erc721_address.write(erc721_address);
@@ -144,6 +162,17 @@ mod dao {
             self.validators.write(validator,false);
             let erc1155_dispatcher = IERC1155EXTDispatcher{contract_address: self.erc1155_address.read()};
             erc1155_dispatcher.mint(get_caller_address(),1,1,[].span());
+        }
+
+        fn upgrade(ref self: ContractState, impl_hash: ClassHash) {
+            assert(impl_hash.is_non_zero(), 'Class hash cannot be zero');
+            starknet::syscalls::replace_class_syscall(impl_hash).unwrap_syscall();
+            self.version.write(self.version.read()+1);
+            self.emit(Event::Upgraded(Upgraded { implementation: impl_hash }))
+        }
+
+        fn version(self: @ContractState) -> u16 {
+            self.version.read()
         }
 
         fn get_organizations(self: @ContractState) -> Array<Organization> {

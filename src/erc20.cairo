@@ -48,7 +48,7 @@ mod erc20 {
 
     #[constructor]
     fn constructor(ref self: ContractState, owner: ContractAddress) {
-        self.erc20.initializer("MyToken", "MTK");
+        self.erc20.initializer("COiTON", "CTN");
         self.ownable.initializer(owner);
     }
 
