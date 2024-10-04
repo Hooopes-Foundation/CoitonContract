@@ -141,6 +141,7 @@ mod dao {
         self.erc20_address.write(erc20_address);
         self.erc1155_address.write(erc1155_address);
         self.erc721_address.write(erc721_address);
+        self.version.write(0);
     }
 
 
@@ -166,6 +167,7 @@ mod dao {
 
         fn upgrade(ref self: ContractState, impl_hash: ClassHash) {
             assert(impl_hash.is_non_zero(), 'Class hash cannot be zero');
+            assert!(get_caller_address()==self.owner.read(),"UNAUTHORIZED");
             starknet::syscalls::replace_class_syscall(impl_hash).unwrap_syscall();
             self.version.write(self.version.read()+1);
             self.emit(Event::Upgraded(Upgraded { implementation: impl_hash }))
