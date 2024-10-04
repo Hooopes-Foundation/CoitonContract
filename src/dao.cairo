@@ -82,6 +82,7 @@ pub trait IDao<TContractState> {
     fn get_organizations(self: @TContractState) -> Array<Organization>;
     fn get_organization(self: @TContractState,domain:ContractAddress) -> Organization;
     fn upgrade(ref self: TContractState, impl_hash: ClassHash);
+    fn set_erc1155(ref self: TContractState,address:ContractAddress);
    
 }
 
@@ -164,6 +165,12 @@ mod dao {
             let erc1155_dispatcher = IERC1155EXTDispatcher{contract_address: self.erc1155_address.read()};
             erc1155_dispatcher.mint(get_caller_address(),1,1,[].span());
         }
+
+        fn set_erc1155(ref self: ContractState,address:ContractAddress) {
+          assert!(get_caller_address()==self.owner.read(),"UNAUTHORIZED");
+          self.erc1155_address.write(address);
+        }
+
 
         fn upgrade(ref self: ContractState, impl_hash: ClassHash) {
             assert(impl_hash.is_non_zero(), 'Class hash cannot be zero');
