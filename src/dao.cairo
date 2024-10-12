@@ -142,7 +142,7 @@ mod dao {
         self.erc20_address.write(erc20_address);
         self.erc1155_address.write(erc1155_address);
         self.erc721_address.write(erc721_address);
-        self.version.write(0);
+      
     }
 
 
@@ -151,11 +151,13 @@ mod dao {
 
          fn register_validator(ref self: ContractState,validator:u256) {
             assert!(get_caller_address()==self.owner.read(),"UNAUTHORIZED");
+            assert!(!self.validators.read(validator),"DUPLICATE_VALIDATOR");
             self.validators.write(validator,true);
         }
 
         fn register_organization(ref self: ContractState,validator:u256, name: felt252,region:felt252) {
             assert!(self.validators.read(validator),"INVALID_ORGANIZATION");
+           // assert!(name.into() != Option::None,"INVALID_INPUT");
             let id = self.organization_count.read()+1;
             let new_org = Organization {id:id,name:name,region:region,validator:validator,domain:get_caller_address()};
             self.organization_by_id.write(id,new_org);
@@ -168,6 +170,7 @@ mod dao {
 
         fn set_erc1155(ref self: ContractState,address:ContractAddress) {
           assert!(get_caller_address()==self.owner.read(),"UNAUTHORIZED");
+          assert!(address.is_non_zero(), "INVALID_ADDRESS");
           self.erc1155_address.write(address);
         }
 
@@ -243,13 +246,18 @@ mod dao {
             assert!(self.listing_by_hash.read(hash),"LISTING_DOES_NOT_EXIST");
             let listing = self.unapproved_listings.read(_id);
             assert!(listing.hash == hash,"INVALID_LISTING");
+            assert!(listing.owner.is_non_zero() && listing.id!=0,"INVALID_LISTING");
             let id = self.listing_count.read()+1;
             self.listing_count.write(id);
+
             let erc20_dispatcher = IERC20Dispatcher{contract_address: self.erc20_address.read()};
             let erc721_dispatcher = IERC721EXTDispatcher{contract_address: self.erc721_address.read()};
             erc20_dispatcher.transfer(get_caller_address(),10_000_000_000_000_000_000);
             erc721_dispatcher.safe_mint(listing.owner,id,[].span());
             self.listings.write(id,listing);
+
+            self.unapproved_listings.write(_id,Listing{hash:'',id:0,owner:Zero::zero(),details:""});
+            
         }
 
 
