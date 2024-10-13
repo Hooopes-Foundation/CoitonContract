@@ -157,7 +157,6 @@ mod dao {
 
         fn register_organization(ref self: ContractState,validator:u256, name: felt252,region:felt252) {
             assert!(self.validators.read(validator),"INVALID_ORGANIZATION");
-           // assert!(name.into() != Option::None,"INVALID_INPUT");
             let id = self.organization_count.read()+1;
             let new_org = Organization {id:id,name:name,region:region,validator:validator,domain:get_caller_address()};
             self.organization_by_id.write(id,new_org);
