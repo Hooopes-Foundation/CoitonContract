@@ -5,12 +5,18 @@ set_env:
 
 
 declare:
-	starkli declare ${path}
+	sncast \
+    declare \
+    --fee-token eth \
+    --contract-name dao
 
-b:
-	scarb build
+t:
+	snforge test
 
-deploy:
-	starkli deploy \
-	${class} \
-	${args}
+upgrade:
+	sncast \
+	invoke \
+	--fee-token eth \
+	--contract-address ${address} \
+	--function "upgrade" \
+	--calldata ${calldata}

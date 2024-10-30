@@ -94,7 +94,7 @@ mod dao {
     use core::num::traits::Zero;
     use  starknet::storage::Map;
     use core::hash::{HashStateTrait, HashStateExTrait};
-    use core::{pedersen::PedersenTrait, poseidon::PoseidonTrait};
+    use core::{poseidon::PoseidonTrait};
     use starknet::class_hash::ClassHash;
     use starknet::SyscallResultTrait;
 
@@ -150,13 +150,13 @@ mod dao {
     impl DaoImpl of super::IDao<ContractState> {
 
          fn register_validator(ref self: ContractState,validator:u256) {
-            assert!(get_caller_address()==self.owner.read(),"UNAUTHORIZED");
-            assert!(!self.validators.read(validator),"DUPLICATE_VALIDATOR");
+            assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
+            assert(!self.validators.read(validator),'DUPLICATE_VALIDATOR');
             self.validators.write(validator,true);
         }
 
         fn register_organization(ref self: ContractState,validator:u256, name: felt252,region:felt252) {
-            assert!(self.validators.read(validator),"INVALID_ORGANIZATION");
+            assert(self.validators.read(validator),'INVALID_ORGANIZATION');
             let id = self.organization_count.read()+1;
             let new_org = Organization {id:id,name:name,region:region,validator:validator,domain:get_caller_address()};
             self.organization_by_id.write(id,new_org);
@@ -168,15 +168,15 @@ mod dao {
         }
 
         fn set_erc1155(ref self: ContractState,address:ContractAddress) {
-          assert!(get_caller_address()==self.owner.read(),"UNAUTHORIZED");
-          assert!(address.is_non_zero(), "INVALID_ADDRESS");
+          assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
+          assert(address.is_non_zero(), 'INVALID_ADDRESS');
           self.erc1155_address.write(address);
         }
 
 
         fn upgrade(ref self: ContractState, impl_hash: ClassHash) {
             assert(impl_hash.is_non_zero(), 'Class hash cannot be zero');
-            assert!(get_caller_address()==self.owner.read(),"UNAUTHORIZED");
+            assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
             starknet::syscalls::replace_class_syscall(impl_hash).unwrap_syscall();
             self.version.write(self.version.read()+1);
             self.emit(Event::Upgraded(Upgraded { implementation: impl_hash }))
@@ -229,8 +229,8 @@ mod dao {
         // Listing
 
          fn create_listing(ref self: ContractState,details:ByteArray,hash:felt252) {
-            assert!(self.has_staked.read(get_caller_address()),"NOT_STAKED");
-            assert!(!self.listing_by_hash.read(hash),"LISTING_ALREADY_EXIST");
+            assert(self.has_staked.read(get_caller_address()),'NOT_STAKED');
+            assert(!self.listing_by_hash.read(hash),'LISTING_ALREADY_EXIST');
             let id = self.unapproved_listing_count.read()+1;
             let listing = Listing{id,owner:get_caller_address(),details,hash};
             self.listing_by_hash.write(hash,true);
@@ -241,11 +241,11 @@ mod dao {
 
 
         fn approve_listing(ref self: ContractState,_id:u256,hash:felt252) {
-            assert!(self.organization_by_domain.read(get_caller_address()).domain.is_non_zero(),"UNAUTHORIZED");
-            assert!(self.listing_by_hash.read(hash),"LISTING_DOES_NOT_EXIST");
+            assert(self.organization_by_domain.read(get_caller_address()).domain.is_non_zero(),'UNAUTHORIZED');
+            assert(self.listing_by_hash.read(hash),'LISTING_DOES_NOT_EXIST');
             let listing = self.unapproved_listings.read(_id);
-            assert!(listing.hash == hash,"INVALID_LISTING");
-            assert!(listing.owner.is_non_zero() && listing.id!=0,"INVALID_LISTING");
+            assert(listing.hash == hash,'INVALID_LISTING');
+            assert(listing.owner.is_non_zero() && listing.id!=0,'INVALID_LISTING');
             let id = self.listing_count.read()+1;
             self.listing_count.write(id);
 
@@ -262,10 +262,10 @@ mod dao {
 
         fn stake_listing_fee(ref self: ContractState,amount:felt252) {
             let staking_fee:felt252 = 20_000_000_000_000_000_000;
-            assert!(amount!=staking_fee,"UNVALID_STAKING_FEE");
+            assert(amount==staking_fee,'UNVALID_STAKING_FEE');
             let erc20_dispatcher = IERC20Dispatcher{contract_address: self.erc20_address.read()};
             let allowance:u256 = erc20_dispatcher.allowance(get_caller_address(),get_contract_address()).into();
-            assert!(allowance>= staking_fee.into(),"NO_ALLOWANCE");
+            assert(allowance>= staking_fee.into(),'NO_ALLOWANCE');
             erc20_dispatcher.transfer_from(get_caller_address(),get_contract_address(),staking_fee);
             self.has_staked.write(get_caller_address(), true);
           

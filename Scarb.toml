@@ -7,10 +7,11 @@ edition = "2023_11"
 
 [dependencies]
 openzeppelin = "0.15.1"
-starknet = "2.7.1"
+starknet = "2.8.4"
 
 [dev-dependencies]
-snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.26.0" }
+snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.31.0" }
+assert_macros = "2.8.4"
 
 [[target.starknet-contract]]
 sierra = true
