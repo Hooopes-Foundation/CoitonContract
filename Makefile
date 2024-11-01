@@ -8,7 +8,11 @@ declare:
 	sncast \
     declare \
     --fee-token eth \
-    --contract-name dao
+    --contract-name ${name}
+
+deploy:
+	sncast deploy --fee-token eth --class-hash ${class_hash} --constructor-calldata ${arg}
+
 
 t:
 	snforge test
