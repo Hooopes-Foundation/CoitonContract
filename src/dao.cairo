@@ -54,7 +54,7 @@ pub trait IERC20<TContractState> {
         ref self: TContractState,
         sender: ContractAddress,
         recipient: ContractAddress,
-        amount: felt252
+        amount: u256
     );
     fn approve(ref self: TContractState, spender: ContractAddress, amount: felt252);
     fn increase_allowance(ref self: TContractState, spender: ContractAddress, added_value: felt252);
@@ -77,7 +77,7 @@ pub trait IDao<TContractState> {
     fn get_erc721(self: @TContractState) -> ContractAddress;
     fn get_erc1155(self: @TContractState) -> ContractAddress;
     fn get_listings(self: @TContractState) -> Array<Listing>;
-    fn stake_listing_fee(ref self: TContractState,amount:felt252);
+    fn stake_listing_fee(ref self: TContractState);
     fn register_organization(ref self: TContractState,validator:u256, name: felt252,region:felt252);
     fn get_organizations(self: @TContractState) -> Array<Organization>;
     fn get_organization(self: @TContractState,domain:ContractAddress) -> Organization;
@@ -260,19 +260,18 @@ mod dao {
         }
 
 
-        fn stake_listing_fee(ref self: ContractState,amount:felt252) {
+        fn stake_listing_fee(ref self: ContractState) {
             let staking_fee:felt252 = 20_000_000_000_000_000_000;
-            assert(amount==staking_fee,'UNVALID_STAKING_FEE');
             let erc20_dispatcher = IERC20Dispatcher{contract_address: self.erc20_address.read()};
             let allowance:u256 = erc20_dispatcher.allowance(get_caller_address(),get_contract_address()).into();
             assert(allowance>= staking_fee.into(),'NO_ALLOWANCE');
-            erc20_dispatcher.transfer_from(get_caller_address(),get_contract_address(),staking_fee);
+            erc20_dispatcher.transfer_from(get_caller_address(),get_contract_address(),staking_fee.into());
             self.has_staked.write(get_caller_address(), true);
           
         }
 
 
-         fn get_unapproved_listings(self: @ContractState) -> Array<Listing> {
+        fn get_unapproved_listings(self: @ContractState) -> Array<Listing> {
             let mut listings:Array<Listing> = array![];
             let mut index = 1;
             while index<=self.unapproved_listing_count.read() {
