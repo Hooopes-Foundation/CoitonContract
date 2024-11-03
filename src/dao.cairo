@@ -49,14 +49,14 @@ pub trait IERC20<TContractState> {
     fn allowance(
         self: @TContractState, owner: ContractAddress, spender: ContractAddress
     ) -> felt252;
-    fn transfer(ref self: TContractState, recipient: ContractAddress, amount: felt252);
+    fn transfer(ref self: TContractState, recipient: ContractAddress, amount: u256);
     fn transfer_from(
         ref self: TContractState,
         sender: ContractAddress,
         recipient: ContractAddress,
         amount: u256
     );
-    fn approve(ref self: TContractState, spender: ContractAddress, amount: felt252);
+    fn approve(ref self: TContractState, spender: ContractAddress, amount: u256);
     fn increase_allowance(ref self: TContractState, spender: ContractAddress, added_value: felt252);
     fn decrease_allowance(
         ref self: TContractState, spender: ContractAddress, subtracted_value: felt252
@@ -83,6 +83,7 @@ pub trait IDao<TContractState> {
     fn get_organization(self: @TContractState,domain:ContractAddress) -> Organization;
     fn upgrade(ref self: TContractState, impl_hash: ClassHash);
     fn set_erc1155(ref self: TContractState,address:ContractAddress);
+    fn set_erc721(ref self: TContractState,address:ContractAddress);
    
 }
 
@@ -173,6 +174,12 @@ mod dao {
           self.erc1155_address.write(address);
         }
 
+        fn set_erc721(ref self: ContractState,address:ContractAddress) {
+          assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
+          assert(address.is_non_zero(), 'INVALID_ADDRESS');
+          self.erc721_address.write(address);
+        }
+
 
         fn upgrade(ref self: ContractState, impl_hash: ClassHash) {
             assert(impl_hash.is_non_zero(), 'Class hash cannot be zero');
@@ -251,7 +258,8 @@ mod dao {
 
             let erc20_dispatcher = IERC20Dispatcher{contract_address: self.erc20_address.read()};
             let erc721_dispatcher = IERC721EXTDispatcher{contract_address: self.erc721_address.read()};
-            erc20_dispatcher.transfer(get_caller_address(),10_000_000_000_000_000_000);
+            let agent_fee = 10_000_000_000_000_000_000;
+            erc20_dispatcher.transfer(get_caller_address(),agent_fee.into());
             erc721_dispatcher.safe_mint(listing.owner,id,[].span());
             self.listings.write(id,listing);
 
@@ -275,7 +283,10 @@ mod dao {
             let mut listings:Array<Listing> = array![];
             let mut index = 1;
             while index<=self.unapproved_listing_count.read() {
-                listings.append(self.unapproved_listings.read(index));
+                let listing = self.unapproved_listings.read(index);
+                if listing.owner != Zero::zero(){
+                    listings.append(self.unapproved_listings.read(index));
+                }
                 index+=1;
             };
 
