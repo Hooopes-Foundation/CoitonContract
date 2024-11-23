@@ -84,6 +84,7 @@ pub trait IDao<TContractState> {
     fn upgrade(ref self: TContractState, impl_hash: ClassHash);
     fn set_erc1155(ref self: TContractState,address:ContractAddress);
     fn set_erc721(ref self: TContractState,address:ContractAddress);
+    fn withdraw(ref self: TContractState,amount: u256);
    
 }
 
@@ -172,6 +173,14 @@ mod dao {
           assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
           assert(address.is_non_zero(), 'INVALID_ADDRESS');
           self.erc1155_address.write(address);
+        }
+
+
+
+        fn withdraw(ref self: ContractState,amount: u256) {
+            assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
+            let erc20_dispatcher = IERC20Dispatcher{contract_address: self.erc20_address.read()};
+            erc20_dispatcher.transfer(get_caller_address(),amount);
         }
 
         fn set_erc721(ref self: ContractState,address:ContractAddress) {
