@@ -58,7 +58,7 @@ mod erc721 {
             token_id: u256,
             data: Span<felt252>,
         ) {
-            if get_caller_address().into() != 0x72108e0f2e55aa86208da88b9d335b6458e8cbfac2427ba737d612e252c02c1{
+            if get_caller_address().into() != 0x31fb09e3bd4016f61bb9cfa306ed6e2bb9261119fe69f3fa6af816922584d42{
                 self.ownable.assert_only_owner();
             }
             self.erc721.safe_mint(recipient, token_id, data);

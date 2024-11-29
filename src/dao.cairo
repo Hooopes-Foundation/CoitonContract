@@ -85,6 +85,7 @@ pub trait IDao<TContractState> {
     fn set_erc1155(ref self: TContractState,address:ContractAddress);
     fn set_erc721(ref self: TContractState,address:ContractAddress);
     fn withdraw(ref self: TContractState,amount: u256);
+    fn register_user(ref self: TContractState,details: ByteArray);
    
 }
 
@@ -107,6 +108,10 @@ mod dao {
         erc1155_address:ContractAddress,
         erc721_address:ContractAddress,
         organization_count: u256,
+        users_count: u256,
+        user_index: Map::<u256, ContractAddress>,
+        user: Map::<ContractAddress, ByteArray>,
+        registered: Map::<ContractAddress, bool>,
         organization_by_id: Map::<u256, Organization>,
         organization_by_domain: Map::<ContractAddress, Organization>,
         validators: Map::<u256, bool>,
@@ -182,6 +187,17 @@ mod dao {
             let erc20_dispatcher = IERC20Dispatcher{contract_address: self.erc20_address.read()};
             erc20_dispatcher.transfer(get_caller_address(),amount);
         }
+
+        fn register_user(ref self: ContractState,details: ByteArray) {
+            assert(!self.registered.read(get_caller_address()),'USER_ALREADY_EXIST');
+            self.registered.write(get_caller_address(),true);
+            self.user.write(get_caller_address(),details);
+            let total_users = self.users_count.read();
+            self.user_index.write(total_users+1,get_caller_address());
+            self.users_count.write(total_users+1);
+        }
+
+
 
         fn set_erc721(ref self: ContractState,address:ContractAddress) {
           assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
