@@ -2,7 +2,7 @@ use core::starknet::ContractAddress;
 use starknet::class_hash::ClassHash;
 
 #[derive(Copy, Drop, Serde, starknet::Store)]
- pub struct Organization {
+pub struct Organization {
     id: u256,
     name: felt252,
     region: felt252,
@@ -11,7 +11,7 @@ use starknet::class_hash::ClassHash;
 }
 
 #[derive(Drop, Serde, starknet::Store)]
- pub struct Listing {
+pub struct Listing {
     id: u256,
     details: ByteArray,
     hash:felt252,
@@ -86,6 +86,7 @@ pub trait IDao<TContractState> {
     fn set_erc721(ref self: TContractState,address:ContractAddress);
     fn withdraw(ref self: TContractState,amount: u256);
     fn register_user(ref self: TContractState,details: ByteArray);
+    fn get_user(self: @TContractState,address: ContractAddress) -> ByteArray;
    
 }
 
@@ -227,6 +228,11 @@ mod dao {
             };
 
             orgs
+        }
+
+
+        fn get_user(self: @ContractState,address: ContractAddress) -> ByteArray {
+          self.user.read(address)
         }
 
 
