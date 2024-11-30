@@ -87,6 +87,8 @@ pub trait IDao<TContractState> {
     fn withdraw(ref self: TContractState,amount: u256);
     fn register_user(ref self: TContractState,details: ByteArray);
     fn get_user(self: @TContractState,address: ContractAddress) -> ByteArray;
+    fn is_user_registered(self: @TContractState,address: ContractAddress) -> bool;
+    fn has_staked(self: @TContractState,address:ContractAddress) -> bool;
    
 }
 
@@ -219,6 +221,11 @@ mod dao {
             self.version.read()
         }
 
+
+        fn has_staked(self: @ContractState,address:ContractAddress) -> bool {
+            self.has_staked.read(address)
+        }
+
         fn get_organizations(self: @ContractState) -> Array<Organization> {
             let mut orgs:Array<Organization> = array![];
             let mut index = 1;
@@ -233,6 +240,11 @@ mod dao {
 
         fn get_user(self: @ContractState,address: ContractAddress) -> ByteArray {
           self.user.read(address)
+        }
+
+
+        fn is_user_registered(self: @ContractState,address: ContractAddress) -> bool {
+          self.registered.read(address)
         }
 
 
