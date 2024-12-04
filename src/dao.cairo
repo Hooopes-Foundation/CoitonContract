@@ -1,13 +1,15 @@
 use core::starknet::ContractAddress;
 use starknet::class_hash::ClassHash;
 
-#[derive(Copy, Drop, Serde, starknet::Store)]
-pub struct Organization {
-    id: u256,
-    name: felt252,
-    region: felt252,
-    validator:u256,
-    domain:ContractAddress
+
+
+
+#[derive(Drop, Serde, starknet::Store)]
+pub struct User {
+    is_dao: bool,
+    approved: bool,
+    region:Option<ByteArray>,
+    details: ByteArray,
 }
 
 #[derive(Drop, Serde, starknet::Store)]
@@ -15,6 +17,7 @@ pub struct Listing {
     id: u256,
     details: ByteArray,
     hash:felt252,
+    region:ByteArray,
     owner: ContractAddress,
 }
 
@@ -66,8 +69,8 @@ pub trait IERC20<TContractState> {
 
 #[starknet::interface]
 pub trait IDao<TContractState> {
-    fn register_validator(ref self: TContractState,validator:u256);
-    fn create_listing(ref self: TContractState,details:ByteArray,hash:felt252) ;
+   // fn register_validator(ref self: TContractState,validator:u256);
+    fn create_listing(ref self: TContractState,region:ByteArray,details:ByteArray,hash:felt252) ;
     fn approve_listing(ref self: TContractState,_id:u256,hash:felt252);
     fn version(self: @TContractState) -> u16;
     fn get_unapproved_listings(self: @TContractState)-> Array<Listing>;
@@ -78,23 +81,26 @@ pub trait IDao<TContractState> {
     fn get_erc1155(self: @TContractState) -> ContractAddress;
     fn get_listings(self: @TContractState) -> Array<Listing>;
     fn stake_listing_fee(ref self: TContractState);
-    fn register_organization(ref self: TContractState,validator:u256, name: felt252,region:felt252);
-    fn get_organizations(self: @TContractState) -> Array<Organization>;
-    fn get_organization(self: @TContractState,domain:ContractAddress) -> Organization;
+    fn approve_dao_member(ref self: TContractState,address:ContractAddress);
+    //fn register_organization(ref self: TContractState,validator:u256, name: felt252,region:felt252);
+   // fn get_organizations(self: @TContractState) -> Array<Organization>;
+   // fn get_organization(self: @TContractState,domain:ContractAddress) -> Organization;
     fn upgrade(ref self: TContractState, impl_hash: ClassHash);
     fn set_erc1155(ref self: TContractState,address:ContractAddress);
     fn set_erc721(ref self: TContractState,address:ContractAddress);
     fn withdraw(ref self: TContractState,amount: u256);
-    fn register_user(ref self: TContractState,details: ByteArray);
-    fn get_user(self: @TContractState,address: ContractAddress) -> ByteArray;
+    fn register_user(ref self: TContractState,is_dao:bool,region: ByteArray,details: ByteArray);
+    fn get_user(self: @TContractState,address: ContractAddress) -> User;
     fn is_user_registered(self: @TContractState,address: ContractAddress) -> bool;
     fn has_staked(self: @TContractState,address:ContractAddress) -> bool;
+    fn get_dao_members(self: @TContractState) -> Array<User>;
+    fn get_unapproved_listings_dao_specific(self: @TContractState,address:ContractAddress) -> Array<Listing>;
    
 }
 
 #[starknet::contract]
 mod dao {
-    use super::{Organization,Listing, IERC1155EXTDispatcher,IERC1155EXTDispatcherTrait,IERC721EXTDispatcher,IERC721EXTDispatcherTrait,IERC20Dispatcher,IERC20DispatcherTrait};
+    use super::{User,Listing, IERC1155EXTDispatcher,IERC1155EXTDispatcherTrait,IERC721EXTDispatcher,IERC721EXTDispatcherTrait,IERC20Dispatcher,IERC20DispatcherTrait};
     use starknet::{ContractAddress,get_caller_address,get_contract_address};
     use core::integer::u256;
     use core::num::traits::Zero;
@@ -113,11 +119,11 @@ mod dao {
         organization_count: u256,
         users_count: u256,
         user_index: Map::<u256, ContractAddress>,
-        user: Map::<ContractAddress, ByteArray>,
+        user: Map::<ContractAddress, User>,
         registered: Map::<ContractAddress, bool>,
-        organization_by_id: Map::<u256, Organization>,
-        organization_by_domain: Map::<ContractAddress, Organization>,
-        validators: Map::<u256, bool>,
+        //organization_by_id: Map::<u256, Organization>,
+        //organization_by_domain: Map::<ContractAddress, Organization>,
+        //validators: Map::<u256, bool>,
         //listing
         has_staked:Map::<ContractAddress,bool>,
         listing_by_hash:Map::<felt252,bool>,
@@ -159,28 +165,23 @@ mod dao {
     #[abi(embed_v0)]
     impl DaoImpl of super::IDao<ContractState> {
 
-         fn register_validator(ref self: ContractState,validator:u256) {
-            assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
-            assert(!self.validators.read(validator),'DUPLICATE_VALIDATOR');
-            self.validators.write(validator,true);
-        }
-
-        fn register_organization(ref self: ContractState,validator:u256, name: felt252,region:felt252) {
-            assert(self.validators.read(validator),'INVALID_ORGANIZATION');
-            let id = self.organization_count.read()+1;
-            let new_org = Organization {id:id,name:name,region:region,validator:validator,domain:get_caller_address()};
-            self.organization_by_id.write(id,new_org);
-            self.organization_by_domain.write(get_caller_address(),new_org);
-            self.organization_count.write(id);
-            self.validators.write(validator,false);
-            let erc1155_dispatcher = IERC1155EXTDispatcher{contract_address: self.erc1155_address.read()};
-            erc1155_dispatcher.mint(get_caller_address(),1,1,[].span());
-        }
 
         fn set_erc1155(ref self: ContractState,address:ContractAddress) {
           assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
           assert(address.is_non_zero(), 'INVALID_ADDRESS');
           self.erc1155_address.write(address);
+        }
+
+
+        fn approve_dao_member(ref self: ContractState,address:ContractAddress) {
+            assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
+            assert(address.is_non_zero(), 'INVALID_ADDRESS');
+            let user = self.user.read(address);
+            assert(user.is_dao,'INVALID_DAO_MEMBER');
+            assert(!user.approved,'ALREADY_APPROVED');
+            self.user.write(address,User{approved:true,..user});
+            let erc1155_dispatcher = IERC1155EXTDispatcher{contract_address: self.erc1155_address.read()};
+            erc1155_dispatcher.mint(address,1,1,[].span());
         }
 
 
@@ -191,10 +192,10 @@ mod dao {
             erc20_dispatcher.transfer(get_caller_address(),amount);
         }
 
-        fn register_user(ref self: ContractState,details: ByteArray) {
+        fn register_user(ref self: ContractState,is_dao:bool,region:ByteArray, details: ByteArray) {
             assert(!self.registered.read(get_caller_address()),'USER_ALREADY_EXIST');
             self.registered.write(get_caller_address(),true);
-            self.user.write(get_caller_address(),details);
+            self.user.write(get_caller_address(),User{is_dao,approved:if is_dao {false}else{true},details,region:if is_dao{Option::Some(region)}else{Option::None}});
             let total_users = self.users_count.read();
             self.user_index.write(total_users+1,get_caller_address());
             self.users_count.write(total_users+1);
@@ -226,21 +227,26 @@ mod dao {
             self.has_staked.read(address)
         }
 
-        fn get_organizations(self: @ContractState) -> Array<Organization> {
-            let mut orgs:Array<Organization> = array![];
+
+
+        fn get_user(self: @ContractState,address: ContractAddress) -> User {
+          self.user.read(address)
+        }
+
+        fn get_dao_members(self: @ContractState) -> Array<User> {
+            let mut dao_members:Array<User> = array![];
             let mut index = 1;
-            while index<=self.organization_count.read() {
-                orgs.append(self.organization_by_id.read(index));
+            while index<=self.users_count.read() {
+                let user = self.user.read(self.user_index.read(index));
+                if user.is_dao{
+                    dao_members.append(user);
+                }
                 index+=1;
             };
 
-            orgs
+            dao_members
         }
 
-
-        fn get_user(self: @ContractState,address: ContractAddress) -> ByteArray {
-          self.user.read(address)
-        }
 
 
         fn is_user_registered(self: @ContractState,address: ContractAddress) -> bool {
@@ -256,9 +262,7 @@ mod dao {
 
         
 
-        fn get_organization(self: @ContractState,domain:ContractAddress) -> Organization {
-           self.organization_by_domain.read(domain)
-        }
+     
 
            fn get_owner(self: @ContractState) -> ContractAddress {
            self.owner.read()
@@ -278,11 +282,11 @@ mod dao {
 
         // Listing
 
-         fn create_listing(ref self: ContractState,details:ByteArray,hash:felt252) {
+         fn create_listing(ref self: ContractState,region:ByteArray,details:ByteArray,hash:felt252) {
             assert(self.has_staked.read(get_caller_address()),'NOT_STAKED');
             assert(!self.listing_by_hash.read(hash),'LISTING_ALREADY_EXIST');
             let id = self.unapproved_listing_count.read()+1;
-            let listing = Listing{id,owner:get_caller_address(),details,hash};
+            let listing = Listing{id,owner:get_caller_address(),details,hash,region};
             self.listing_by_hash.write(hash,true);
             self.unapproved_listings.write(id,listing);
             self.unapproved_listing_count.write(id);
@@ -291,10 +295,12 @@ mod dao {
 
 
         fn approve_listing(ref self: ContractState,_id:u256,hash:felt252) {
-            assert(self.organization_by_domain.read(get_caller_address()).domain.is_non_zero(),'UNAUTHORIZED');
+            assert(self.user.read(get_caller_address()).is_dao,'UNAUTHORIZED');
+            assert(self.user.read(get_caller_address()).approved,'UNAUTHORIZED');
             assert(self.listing_by_hash.read(hash),'LISTING_DOES_NOT_EXIST');
             let listing = self.unapproved_listings.read(_id);
             assert(listing.hash == hash,'INVALID_LISTING');
+            assert(self.user.read(get_caller_address()).region.unwrap() == listing.region,'UNAUTHORIZED');
             assert(listing.owner.is_non_zero() && listing.id!=0,'INVALID_LISTING');
             let id = self.listing_count.read()+1;
             self.listing_count.write(id);
@@ -306,7 +312,7 @@ mod dao {
             erc721_dispatcher.safe_mint(listing.owner,id,[].span());
             self.listings.write(id,listing);
 
-            self.unapproved_listings.write(_id,Listing{hash:'',id:0,owner:Zero::zero(),details:""});
+            self.unapproved_listings.write(_id,Listing{hash:'',id:0,owner:Zero::zero(),details:"",region:""});
             
         }
 
@@ -329,6 +335,27 @@ mod dao {
                 let listing = self.unapproved_listings.read(index);
                 if listing.owner != Zero::zero(){
                     listings.append(self.unapproved_listings.read(index));
+                }
+                index+=1;
+            };
+
+            listings
+        }
+
+
+        fn get_unapproved_listings_dao_specific(self: @ContractState,address:ContractAddress) -> Array<Listing> {
+            let dao_member = self.user.read(address);
+            assert(dao_member.is_dao,'UNAUTHORIZED');
+            assert(dao_member.approved,'UNAUTHORIZED');
+            let dao_region = dao_member.region.unwrap();
+            let mut listings:Array<Listing> = array![];
+            let mut index = 1;
+            while index<=self.unapproved_listing_count.read() {
+                let listing = self.unapproved_listings.read(index);
+                if listing.owner != Zero::zero(){
+                    if listing.region == dao_region{
+                        listings.append(self.unapproved_listings.read(index));
+                    }
                 }
                 index+=1;
             };
