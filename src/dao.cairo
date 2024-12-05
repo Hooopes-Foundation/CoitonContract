@@ -13,6 +13,23 @@ pub struct User {
 }
 
 #[derive(Drop, Serde, starknet::Store)]
+pub struct RealestateIndex {
+    region: ByteArray,
+    index_value: felt252,
+    month_over_month_change:felt252,
+    year_over_year_change:felt252,
+    median_price:felt252,
+    trend:felt252,
+}
+
+#[derive(Drop, Serde, starknet::Store)]
+pub struct RealestateIndexData {
+   index:RealestateIndex,
+   proposer:ContractAddress,
+   timestamp:u64,
+}
+
+#[derive(Drop, Serde, starknet::Store)]
 pub struct Listing {
     id: u256,
     details: ByteArray,
@@ -95,20 +112,17 @@ pub trait IDao<TContractState> {
     fn has_staked(self: @TContractState,address:ContractAddress) -> bool;
     fn get_dao_members(self: @TContractState) -> Array<User>;
     fn get_unapproved_listings_dao_specific(self: @TContractState,address:ContractAddress) -> Array<Listing>;
+    fn store_realestate_index(ref self: TContractState,indices:Array<RealestateIndexData>);
+    fn get_realestate_indices(self: @TContractState) -> Array<RealestateIndexData>;
+    fn get_realestate_indices_by_region(self: @TContractState,region:ByteArray) -> Array<RealestateIndexData>;
    
 }
 
 #[starknet::contract]
 mod dao {
-    use super::{User,Listing, IERC1155EXTDispatcher,IERC1155EXTDispatcherTrait,IERC721EXTDispatcher,IERC721EXTDispatcherTrait,IERC20Dispatcher,IERC20DispatcherTrait};
-    use starknet::{ContractAddress,get_caller_address,get_contract_address};
-    use core::integer::u256;
-    use core::num::traits::Zero;
-    use  starknet::storage::Map;
-    use core::hash::{HashStateTrait, HashStateExTrait};
-    use core::{poseidon::PoseidonTrait};
-    use starknet::class_hash::ClassHash;
-    use starknet::SyscallResultTrait;
+    use super::{User,Listing,RealestateIndexData, IERC1155EXTDispatcher,IERC1155EXTDispatcherTrait,IERC721EXTDispatcher,IERC721EXTDispatcherTrait,IERC20Dispatcher,IERC20DispatcherTrait};
+    use starknet::{SyscallResultTrait,class_hash::ClassHash,storage::Map,ContractAddress,get_caller_address,get_contract_address,get_block_timestamp};
+    use core::{poseidon::PoseidonTrait,hash::{HashStateTrait, HashStateExTrait},num::traits::Zero,integer::u256};
 
     #[storage]
     struct Storage {
@@ -116,7 +130,8 @@ mod dao {
         erc20_address:ContractAddress,
         erc1155_address:ContractAddress,
         erc721_address:ContractAddress,
-        organization_count: u256,
+        realestate_index_count: u256,
+        realestate_index:Map::<u256,RealestateIndexData>,
         users_count: u256,
         user_index: Map::<u256, ContractAddress>,
         user: Map::<ContractAddress, User>,
@@ -184,6 +199,21 @@ mod dao {
             erc1155_dispatcher.mint(address,1,1,[].span());
         }
 
+
+
+        fn store_realestate_index(ref self: ContractState,indices:Array<RealestateIndexData>) {
+            assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
+
+            let current_index_count = self.realestate_index_count.read();
+            let mut index = current_index_count;
+            for data in indices {
+                index+=1;
+                assert(data.proposer.is_non_zero(), 'INVALID_ADDRESS');
+                assert(data.index.region !="",'INVALID_REGION');
+                self.realestate_index.write(index,RealestateIndexData{timestamp:get_block_timestamp(),..data});
+            };
+            self.realestate_index_count.write(index);
+        }
 
 
         fn withdraw(ref self: ContractState,amount: u256) {
@@ -254,29 +284,24 @@ mod dao {
         }
 
 
-         fn hash(self: @ContractState, operand:felt252) -> felt252{
+        fn hash(self: @ContractState, operand:felt252) -> felt252{
             let poseidon_hash = PoseidonTrait::new().update_with(operand).finalize();
             poseidon_hash
         }
 
-
-        
-
-     
-
-           fn get_owner(self: @ContractState) -> ContractAddress {
+        fn get_owner(self: @ContractState) -> ContractAddress {
            self.owner.read()
         }
 
-             fn get_erc20(self: @ContractState) -> ContractAddress {
+        fn get_erc20(self: @ContractState) -> ContractAddress {
            self.erc20_address.read()
         }
 
-             fn get_erc721(self: @ContractState) -> ContractAddress {
+        fn get_erc721(self: @ContractState) -> ContractAddress {
            self.erc721_address.read()
         }
 
-             fn get_erc1155(self: @ContractState) -> ContractAddress {
+        fn get_erc1155(self: @ContractState) -> ContractAddress {
            self.erc1155_address.read()
         }
 
@@ -342,11 +367,44 @@ mod dao {
             listings
         }
 
+        fn get_realestate_indices(self: @ContractState) -> Array<RealestateIndexData> {
+            let mut indices:Array<RealestateIndexData> = array![];
+            let mut index = 1;
+            while index<=self.realestate_index_count.read() {
+                let estate_index = self.realestate_index.read(index);
+                indices.append(estate_index);
+                index+=1;
+            };
+
+            indices
+        }
+
+        fn get_realestate_indices_by_region(self: @ContractState,region:ByteArray) -> Array<RealestateIndexData> {
+            if region == "" {
+                return array![];
+            }
+            let mut indices:Array<RealestateIndexData> = array![];
+            let mut index = 1;
+            while index<=self.realestate_index_count.read() {
+                let estate_index = self.realestate_index.read(index);
+                if estate_index.index.region == region {
+                    indices.append(estate_index);
+                }
+                index+=1;
+            };
+
+            indices
+        }
+
 
         fn get_unapproved_listings_dao_specific(self: @ContractState,address:ContractAddress) -> Array<Listing> {
+            if address.is_non_zero(){
+                return array![];
+            }
             let dao_member = self.user.read(address);
-            assert(dao_member.is_dao,'UNAUTHORIZED');
-            assert(dao_member.approved,'UNAUTHORIZED');
+            if !dao_member.is_dao || !dao_member.approved {
+                return array![];
+            }
             let dao_region = dao_member.region.unwrap();
             let mut listings:Array<Listing> = array![];
             let mut index = 1;
