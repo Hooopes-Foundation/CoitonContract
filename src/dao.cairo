@@ -86,7 +86,7 @@ pub trait IERC20<TContractState> {
 
 #[starknet::interface]
 pub trait IDao<TContractState> {
-   // fn register_validator(ref self: TContractState,validator:u256);
+  
     fn create_listing(ref self: TContractState,region:ByteArray,details:ByteArray,hash:felt252) ;
     fn approve_listing(ref self: TContractState,_id:u256,hash:felt252);
     fn version(self: @TContractState) -> u16;
@@ -99,9 +99,6 @@ pub trait IDao<TContractState> {
     fn get_listings(self: @TContractState) -> Array<Listing>;
     fn stake_listing_fee(ref self: TContractState);
     fn approve_dao_member(ref self: TContractState,address:ContractAddress);
-    //fn register_organization(ref self: TContractState,validator:u256, name: felt252,region:felt252);
-   // fn get_organizations(self: @TContractState) -> Array<Organization>;
-   // fn get_organization(self: @TContractState,domain:ContractAddress) -> Organization;
     fn upgrade(ref self: TContractState, impl_hash: ClassHash);
     fn set_erc1155(ref self: TContractState,address:ContractAddress);
     fn set_erc721(ref self: TContractState,address:ContractAddress);
@@ -115,7 +112,6 @@ pub trait IDao<TContractState> {
     fn store_realestate_index(ref self: TContractState,indices:Array<RealestateIndexData>);
     fn get_realestate_indices(self: @TContractState) -> Array<RealestateIndexData>;
     fn get_realestate_indices_by_region(self: @TContractState,region:ByteArray) -> Array<RealestateIndexData>;
-   
 }
 
 #[starknet::contract]
@@ -136,9 +132,6 @@ mod dao {
         user_index: Map::<u256, ContractAddress>,
         user: Map::<ContractAddress, User>,
         registered: Map::<ContractAddress, bool>,
-        //organization_by_id: Map::<u256, Organization>,
-        //organization_by_domain: Map::<ContractAddress, Organization>,
-        //validators: Map::<u256, bool>,
         //listing
         has_staked:Map::<ContractAddress,bool>,
         listing_by_hash:Map::<felt252,bool>,
