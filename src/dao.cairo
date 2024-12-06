@@ -120,9 +120,20 @@ pub trait IDao<TContractState> {
 
 #[starknet::contract]
 mod dao {
+
+    // *************************************************************************
+    //                            IMPORT
+    // *************************************************************************
+
+
     use super::{User,Listing,RealestateIndexData, IERC1155EXTDispatcher,IERC1155EXTDispatcherTrait,IERC721EXTDispatcher,IERC721EXTDispatcherTrait,IERC20Dispatcher,IERC20DispatcherTrait};
     use starknet::{SyscallResultTrait,class_hash::ClassHash,storage::Map,ContractAddress,get_caller_address,get_contract_address,get_block_timestamp};
     use core::{poseidon::PoseidonTrait,hash::{HashStateTrait, HashStateExTrait},num::traits::Zero,integer::u256};
+
+
+    // *************************************************************************
+    //                              STORAGE
+    // *************************************************************************
 
     #[storage]
     struct Storage {
@@ -150,11 +161,17 @@ mod dao {
 
     }
 
+
+    // *************************************************************************
+    //                              EVENTS
+    // *************************************************************************
     #[event]
     #[derive(Copy, Drop, Debug, PartialEq, starknet::Event)]
     pub enum Event {
         Upgraded: Upgraded,
     }
+
+
 
     #[derive(Copy, Drop, Debug, PartialEq, starknet::Event)]
     pub struct Upgraded {
@@ -176,69 +193,12 @@ mod dao {
       
     }
 
-
+    // *************************************************************************
+    //                              EXTERNAL FUNCTIONS
+    // *************************************************************************
+      
     #[abi(embed_v0)]
     impl DaoImpl of super::IDao<ContractState> {
-
-
-        fn set_erc1155(ref self: ContractState,address:ContractAddress) {
-          assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
-          assert(address.is_non_zero(), 'INVALID_ADDRESS');
-          self.erc1155_address.write(address);
-        }
-
-
-        fn approve_dao_member(ref self: ContractState,address:ContractAddress) {
-            assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
-            assert(address.is_non_zero(), 'INVALID_ADDRESS');
-            let user = self.user.read(address);
-            assert(user.is_dao,'INVALID_DAO_MEMBER');
-            assert(!user.approved,'ALREADY_APPROVED');
-            self.user.write(address,User{approved:true,..user});
-            let erc1155_dispatcher = IERC1155EXTDispatcher{contract_address: self.erc1155_address.read()};
-            erc1155_dispatcher.mint(address,1,1,[].span());
-        }
-
-
-
-        fn store_realestate_index(ref self: ContractState,indices:Array<RealestateIndexData>) {
-            assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
-
-            let current_index_count = self.realestate_index_count.read();
-            let mut index = current_index_count;
-            for data in indices {
-                index+=1;
-                assert(data.proposer.is_non_zero(), 'INVALID_ADDRESS');
-                assert(data.index.region !="",'INVALID_REGION');
-                self.realestate_index.write(index,RealestateIndexData{timestamp:get_block_timestamp(),..data});
-            };
-            self.realestate_index_count.write(index);
-        }
-
-
-        fn withdraw(ref self: ContractState,amount: u256) {
-            assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
-            let erc20_dispatcher = IERC20Dispatcher{contract_address: self.erc20_address.read()};
-            erc20_dispatcher.transfer(get_caller_address(),amount);
-        }
-
-        fn register_user(ref self: ContractState,is_dao:bool,region:ByteArray, details: ByteArray) {
-            assert(!self.registered.read(get_caller_address()),'USER_ALREADY_EXIST');
-            self.registered.write(get_caller_address(),true);
-            self.user.write(get_caller_address(),User{is_dao,approved:if is_dao {false}else{true},details,region:if is_dao{Option::Some(region)}else{Option::None}});
-            let total_users = self.users_count.read();
-            self.user_index.write(total_users+1,get_caller_address());
-            self.users_count.write(total_users+1);
-        }
-
-
-
-        fn set_erc721(ref self: ContractState,address:ContractAddress) {
-          assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
-          assert(address.is_non_zero(), 'INVALID_ADDRESS');
-          self.erc721_address.write(address);
-        }
-
 
         fn upgrade(ref self: ContractState, impl_hash: ClassHash) {
             assert(impl_hash.is_non_zero(), 'Class hash cannot be zero');
@@ -252,62 +212,17 @@ mod dao {
             self.version.read()
         }
 
-
-        fn has_staked(self: @ContractState,address:ContractAddress) -> bool {
-            self.has_staked.read(address)
+        fn register_user(ref self: ContractState,is_dao:bool,region:ByteArray, details: ByteArray) {
+            assert(!self.registered.read(get_caller_address()),'USER_ALREADY_EXIST');
+            self.registered.write(get_caller_address(),true);
+            self.user.write(get_caller_address(),User{is_dao,approved:if is_dao {false}else{true},details,region:if is_dao{Option::Some(region)}else{Option::None}});
+            let total_users = self.users_count.read();
+            self.user_index.write(total_users+1,get_caller_address());
+            self.users_count.write(total_users+1);
         }
 
 
-
-        fn get_user(self: @ContractState,address: ContractAddress) -> User {
-          self.user.read(address)
-        }
-
-        fn get_dao_members(self: @ContractState) -> Array<User> {
-            let mut dao_members:Array<User> = array![];
-            let mut index = 1;
-            while index<=self.users_count.read() {
-                let user = self.user.read(self.user_index.read(index));
-                if user.is_dao{
-                    dao_members.append(user);
-                }
-                index+=1;
-            };
-
-            dao_members
-        }
-
-
-
-        fn is_user_registered(self: @ContractState,address: ContractAddress) -> bool {
-          self.registered.read(address)
-        }
-
-
-        fn hash(self: @ContractState, operand:felt252) -> felt252{
-            let poseidon_hash = PoseidonTrait::new().update_with(operand).finalize();
-            poseidon_hash
-        }
-
-        fn get_owner(self: @ContractState) -> ContractAddress {
-           self.owner.read()
-        }
-
-        fn get_erc20(self: @ContractState) -> ContractAddress {
-           self.erc20_address.read()
-        }
-
-        fn get_erc721(self: @ContractState) -> ContractAddress {
-           self.erc721_address.read()
-        }
-
-        fn get_erc1155(self: @ContractState) -> ContractAddress {
-           self.erc1155_address.read()
-        }
-
-        // Listing
-
-         fn create_listing(ref self: ContractState,region:ByteArray,details:ByteArray,hash:felt252) {
+        fn create_listing(ref self: ContractState,region:ByteArray,details:ByteArray,hash:felt252) {
             assert(self.has_staked.read(get_caller_address()),'NOT_STAKED');
             assert(!self.listing_by_hash.read(hash),'LISTING_ALREADY_EXIST');
             let id = self.unapproved_listing_count.read()+1;
@@ -353,6 +268,141 @@ mod dao {
         }
 
 
+        fn approve_dao_member(ref self: ContractState,address:ContractAddress) {
+            assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
+            assert(address.is_non_zero(), 'INVALID_ADDRESS');
+            let user = self.user.read(address);
+            assert(user.is_dao,'INVALID_DAO_MEMBER');
+            assert(!user.approved,'ALREADY_APPROVED');
+            self.user.write(address,User{approved:true,..user});
+            let erc1155_dispatcher = IERC1155EXTDispatcher{contract_address: self.erc1155_address.read()};
+            erc1155_dispatcher.mint(address,1,1,[].span());
+        }
+
+
+
+        fn store_realestate_index(ref self: ContractState,indices:Array<RealestateIndexData>) {
+            assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
+
+            let current_index_count = self.realestate_index_count.read();
+            let mut index = current_index_count;
+            for data in indices {
+                index+=1;
+                assert(data.proposer.is_non_zero(), 'INVALID_ADDRESS');
+                assert(data.index.region !="",'INVALID_REGION');
+                self.realestate_index.write(index,RealestateIndexData{timestamp:get_block_timestamp(),..data});
+            };
+            self.realestate_index_count.write(index);
+        }
+
+
+        fn withdraw(ref self: ContractState,amount: u256) {
+            assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
+            let erc20_dispatcher = IERC20Dispatcher{contract_address: self.erc20_address.read()};
+            erc20_dispatcher.transfer(get_caller_address(),amount);
+        }
+
+
+        fn set_erc1155(ref self: ContractState,address:ContractAddress) {
+            assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
+            assert(address.is_non_zero(), 'INVALID_ADDRESS');
+            self.erc1155_address.write(address);
+          }
+
+
+
+        fn set_erc721(ref self: ContractState,address:ContractAddress) {
+          assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
+          assert(address.is_non_zero(), 'INVALID_ADDRESS');
+          self.erc721_address.write(address);
+        }
+
+
+        fn has_staked(self: @ContractState,address:ContractAddress) -> bool {
+            self.has_staked.read(address)
+        }
+
+
+        fn is_user_registered(self: @ContractState,address: ContractAddress) -> bool {
+          self.registered.read(address)
+        }
+
+
+        fn hash(self: @ContractState, operand:felt252) -> felt252{
+            let poseidon_hash = PoseidonTrait::new().update_with(operand).finalize();
+            poseidon_hash
+        }
+
+
+    // *************************************************************************
+    //                            GETTER FUNCTIONS
+    // *************************************************************************
+
+
+
+
+
+    fn get_listings(self: @ContractState) -> Array<Listing> {
+        let mut listings:Array<Listing> = array![];
+        let mut index = 1;
+        while index<=self.listing_count.read() {
+            listings.append(self.listings.read(index));
+            index+=1;
+        };
+
+        listings
+    }
+    
+        fn get_user(self: @ContractState,address: ContractAddress) -> User {
+            self.user.read(address)
+          }
+
+
+          fn get_owner(self: @ContractState) -> ContractAddress {
+            self.owner.read()
+         }
+ 
+         fn get_erc20(self: @ContractState) -> ContractAddress {
+            self.erc20_address.read()
+         }
+ 
+         fn get_erc721(self: @ContractState) -> ContractAddress {
+            self.erc721_address.read()
+         }
+ 
+         fn get_erc1155(self: @ContractState) -> ContractAddress {
+            self.erc1155_address.read()
+         }  
+
+         fn get_realestate_indices(self: @ContractState) -> Array<RealestateIndexData> {
+            let mut indices:Array<RealestateIndexData> = array![];
+            let mut index = 1;
+            while index<=self.realestate_index_count.read() {
+                let estate_index = self.realestate_index.read(index);
+                indices.append(estate_index);
+                index+=1;
+            };
+
+            indices
+        }
+
+        fn get_dao_members(self: @ContractState) -> Array<User> {
+            let mut dao_members:Array<User> = array![];
+            let mut index = 1;
+            while index<=self.users_count.read() {
+                let user = self.user.read(self.user_index.read(index));
+                if user.is_dao{
+                    dao_members.append(user);
+                }
+                index+=1;
+            };
+
+            dao_members
+        }
+
+
+
+
         fn get_unapproved_listings(self: @ContractState) -> Array<Listing> {
             let mut listings:Array<Listing> = array![];
             let mut index = 1;
@@ -367,18 +417,7 @@ mod dao {
             listings
         }
 
-        fn get_realestate_indices(self: @ContractState) -> Array<RealestateIndexData> {
-            let mut indices:Array<RealestateIndexData> = array![];
-            let mut index = 1;
-            while index<=self.realestate_index_count.read() {
-                let estate_index = self.realestate_index.read(index);
-                indices.append(estate_index);
-                index+=1;
-            };
-
-            indices
-        }
-
+       
         fn get_realestate_indices_by_region(self: @ContractState,region:ByteArray) -> Array<RealestateIndexData> {
             if region == "" {
                 return array![];
@@ -421,15 +460,6 @@ mod dao {
             listings
         }
 
-        fn get_listings(self: @ContractState) -> Array<Listing> {
-            let mut listings:Array<Listing> = array![];
-            let mut index = 1;
-            while index<=self.listing_count.read() {
-                listings.append(self.listings.read(index));
-                index+=1;
-            };
-
-            listings
-        }
+       
     }
 }
