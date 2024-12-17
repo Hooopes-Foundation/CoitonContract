@@ -111,6 +111,7 @@ pub trait IDao<TContractState> {
     fn get_unapproved_listings_dao_specific(self: @TContractState,address:ContractAddress) -> Array<Listing>;
     fn store_realestate_index(ref self: TContractState,indices:Array<RealestateIndexData>);
     fn get_realestate_indices(self: @TContractState) -> Array<RealestateIndexData>;
+    fn set_erc20(ref self: TContractState,address:ContractAddress);
     fn get_realestate_indices_by_region(self: @TContractState,region:ByteArray) -> Array<RealestateIndexData>;
 }
 
@@ -142,6 +143,7 @@ mod dao {
         version:u16,
 
     }
+    
 
     #[event]
     #[derive(Copy, Drop, Debug, PartialEq, starknet::Event)]
@@ -178,6 +180,12 @@ mod dao {
           assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
           assert(address.is_non_zero(), 'INVALID_ADDRESS');
           self.erc1155_address.write(address);
+        }
+
+        fn set_erc20(ref self: ContractState,address:ContractAddress) {
+          assert(get_caller_address()==self.owner.read(),'UNAUTHORIZED');
+          assert(address.is_non_zero(), 'INVALID_ADDRESS');
+          self.erc20_address.write(address);
         }
 
 
