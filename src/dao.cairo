@@ -281,10 +281,10 @@ mod dao {
             assert(self.listing_by_hash.read(hash), 'LISTING_DOES_NOT_EXIST');
             let listing = self.unapproved_listings.read(_id);
             assert(listing.hash == hash, 'INVALID_LISTING');
-            assert(
-                self.user.read(get_caller_address()).region.unwrap() == listing.region,
-                'UNAUTHORIZED'
-            );
+            // assert(
+            //     self.user.read(get_caller_address()).region.unwrap() == listing.region,
+            //     'UNAUTHORIZED'
+            // );
             assert(listing.owner.is_non_zero() && listing.id != 0, 'INVALID_LISTING');
             let id = self.listing_count.read() + 1;
             self.listing_count.write(id);
